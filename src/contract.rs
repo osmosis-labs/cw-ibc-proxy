@@ -2,7 +2,7 @@
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
     to_json_binary, Binary, CosmosMsg, Deps, DepsMut, Env, IbcMsg, IbcTimeout, MessageInfo,
-    Response, StdError, StdResult, Timestamp,
+    Response, StdResult, Timestamp,
 };
 use cw2::set_contract_version;
 
@@ -76,7 +76,7 @@ pub mod execute {
             channel_id: state.channel_id,
             to_address: state.to_address,
             amount: coin,
-            timeout: IbcTimeout::from(state.ibc_timeout),
+            timeout: state.ibc_timeout,
             memo: Some(state.memo),
         });
 
