@@ -1,13 +1,13 @@
 #[cfg(not(feature = "library"))]
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
-    to_json_binary, Binary, Coin, CosmosMsg, Deps, DepsMut, Env, IbcMsg, IbcTimeout, MessageInfo,
-    Response, StdResult, Timestamp,
+    to_json_binary, Binary, CosmosMsg, Deps, DepsMut, Env, IbcMsg, IbcTimeout, MessageInfo,
+    Response, StdError, StdResult, Timestamp,
 };
 use cw2::set_contract_version;
 
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, GetBalanceResponse, InstantiateMsg, QueryMsg};
+use crate::msg::{ExecuteMsg, GetBalancesResponse, InstantiateMsg, QueryMsg};
 use crate::state::{State, STATE};
 
 // version info for migration info
@@ -85,29 +85,34 @@ pub mod execute {
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
-pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
+pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::GetBalance {} => to_json_binary(&query::balance(deps)?),
+        QueryMsg::GetBalances {} => to_json_binary(&query::balance(deps, env)?),
     }
 }
 
 pub mod query {
     use super::*;
 
-    pub fn balance(deps: Deps) -> StdResult<GetBalanceResponse> {
-        unimplemented!();
+    pub fn balance(deps: Deps, env: Env) -> StdResult<GetBalancesResponse> {
+        let coins = deps.querier.query_all_balances(env.contract.address)?;
+
+        Ok(GetBalancesResponse { balances: coins })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cosmwasm_std::testing::{message_info, mock_dependencies, mock_env};
-    use cosmwasm_std::{coins, from_json, Addr};
+    use cosmwasm_std::testing::{message_info, mock_dependencies_with_balance, mock_env};
+    use cosmwasm_std::{coins, from_json, Addr, Coin, Uint128};
 
     #[test]
-    fn increment() {
-        let mut deps = mock_dependencies();
+    fn disburse_funds() {
+        let mut deps = mock_dependencies_with_balance(&[Coin {
+            amount: Uint128::new(2000),
+            denom: "denom".to_string(),
+        }]);
 
         let msg = InstantiateMsg {
             min_disbursal_amount: 0,
@@ -122,5 +127,34 @@ mod tests {
             denom: "denom".to_string(),
         };
         let _res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
+    }
+
+    #[test]
+    fn balances() {
+        let mut deps = mock_dependencies_with_balance(&[Coin {
+            amount: Uint128::new(2000),
+            denom: "denom".to_string(),
+        }]);
+
+        let msg = InstantiateMsg {
+            min_disbursal_amount: 0,
+            channel_id: "channel-0".to_string(),
+            ibc_timeout: 1000,
+            memo: "memo".to_string(),
+            to_address: "to_address".to_string(),
+        };
+        let info = message_info(&Addr::unchecked("123"), &coins(2000, "denom"));
+        let _res = instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
+        let msg = QueryMsg::GetBalances {};
+        let res = query(deps.as_ref(), mock_env(), msg).unwrap();
+
+        let value: GetBalancesResponse = from_json(&res).unwrap();
+        assert_eq!(
+            vec![Coin {
+                amount: Uint128::new(2000),
+                denom: "denom".to_string(),
+            }],
+            value.balances
+        );
     }
 }

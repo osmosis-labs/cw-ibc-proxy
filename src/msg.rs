@@ -1,5 +1,5 @@
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cosmwasm_std::IbcTimeout;
+use cosmwasm_std::{Coin, IbcTimeout};
 
 #[cw_serde]
 pub struct InstantiateMsg {
@@ -18,12 +18,12 @@ pub enum ExecuteMsg {
 #[cw_serde]
 #[derive(QueryResponses)]
 pub enum QueryMsg {
-    #[returns(GetBalanceResponse)]
-    GetBalance {},
+    #[returns(GetBalancesResponse)]
+    GetBalances {},
 }
 
 // We define a custom struct for each query response
 #[cw_serde]
-pub struct GetBalanceResponse {
-    pub balance: u64,
+pub struct GetBalancesResponse {
+    pub balances: Vec<Coin>,
 }
