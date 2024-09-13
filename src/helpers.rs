@@ -8,8 +8,6 @@ use cosmwasm_std::{
 
 use crate::msg::{ExecuteMsg, GetBalancesResponse, QueryMsg};
 
-/// CwTemplateContract is a wrapper around Addr that provides a lot of helpers
-/// for working with this.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct CwTemplateContract(pub Addr);
 
@@ -28,7 +26,6 @@ impl CwTemplateContract {
         .into())
     }
 
-    /// Get Count
     pub fn balance<Q, T, CQ>(&self, querier: &Q) -> StdResult<GetBalancesResponse>
     where
         Q: Querier,

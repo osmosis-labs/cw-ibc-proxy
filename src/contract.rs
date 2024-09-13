@@ -10,7 +10,6 @@ use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, GetBalancesResponse, InstantiateMsg, QueryMsg};
 use crate::state::{State, STATE};
 
-// version info for migration info
 const CONTRACT_NAME: &str = "crates.io:osmosis-revenue-transfer-contract";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
