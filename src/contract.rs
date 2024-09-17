@@ -7,7 +7,7 @@ use cosmwasm_std::{
 use cw2::set_contract_version;
 
 use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, GetBalancesResponse, InstantiateMsg, QueryMsg};
+use crate::msg::{ExecuteMsg, GetBalanceResponse, InstantiateMsg, QueryMsg};
 use crate::state::{State, STATE};
 
 const CONTRACT_NAME: &str = "crates.io:osmosis-revenue-transfer-contract";
@@ -57,15 +57,7 @@ pub mod execute {
         denom: String,
     ) -> Result<Response, ContractError> {
         let state = STATE.load(deps.storage)?;
-        let coin = match deps
-            .querier
-            .query_all_balances(env.contract.address)?
-            .into_iter()
-            .find(|c| c.denom == denom)
-        {
-            Some(coin) => coin,
-            None => return Err(ContractError::DenomNotFound(denom)),
-        };
+        let coin = deps.querier.query_balance(env.contract.address, denom)?;
 
         if coin.amount < state.min_disbursal_amount.into() {
             return Err(ContractError::InsufficientFunds {});
@@ -86,17 +78,17 @@ pub mod execute {
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::GetBalances {} => to_json_binary(&query::balance(deps, env)?),
+        QueryMsg::GetBalance { denom } => to_json_binary(&query::balance(deps, env, denom)?),
     }
 }
 
 pub mod query {
     use super::*;
 
-    pub fn balance(deps: Deps, env: Env) -> StdResult<GetBalancesResponse> {
-        let coins = deps.querier.query_all_balances(env.contract.address)?;
+    pub fn balance(deps: Deps, env: Env, denom: String) -> StdResult<GetBalanceResponse> {
+        let coin = deps.querier.query_balance(env.contract.address, denom)?;
 
-        Ok(GetBalancesResponse { balances: coins })
+        Ok(GetBalanceResponse { balance: coin })
     }
 }
 
@@ -144,16 +136,18 @@ mod tests {
         };
         let info = message_info(&Addr::unchecked("123"), &coins(2000, "denom"));
         let _res = instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
-        let msg = QueryMsg::GetBalances {};
+        let msg = QueryMsg::GetBalance {
+            denom: "denom".to_string(),
+        };
         let res = query(deps.as_ref(), mock_env(), msg).unwrap();
 
-        let value: GetBalancesResponse = from_json(&res).unwrap();
+        let value: GetBalanceResponse = from_json(&res).unwrap();
         assert_eq!(
-            vec![Coin {
+            Coin {
                 amount: Uint128::new(2000),
                 denom: "denom".to_string(),
-            }],
-            value.balances
+            },
+            value.balance
         );
     }
 }

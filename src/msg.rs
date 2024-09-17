@@ -18,12 +18,11 @@ pub enum ExecuteMsg {
 #[cw_serde]
 #[derive(QueryResponses)]
 pub enum QueryMsg {
-    #[returns(GetBalancesResponse)]
-    GetBalances {},
+    #[returns(GetBalanceResponse)]
+    GetBalance { denom: String },
 }
 
-// We define a custom struct for each query response
 #[cw_serde]
-pub struct GetBalancesResponse {
-    pub balances: Vec<Coin>,
+pub struct GetBalanceResponse {
+    pub balance: Coin,
 }

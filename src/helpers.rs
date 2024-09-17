@@ -6,7 +6,7 @@ use cosmwasm_std::{
     WasmQuery,
 };
 
-use crate::msg::{ExecuteMsg, GetBalancesResponse, QueryMsg};
+use crate::msg::{ExecuteMsg, GetBalanceResponse, QueryMsg};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct CwTemplateContract(pub Addr);
@@ -26,19 +26,19 @@ impl CwTemplateContract {
         .into())
     }
 
-    pub fn balance<Q, T, CQ>(&self, querier: &Q) -> StdResult<GetBalancesResponse>
+    pub fn balance<Q, T, CQ>(&self, querier: &Q, denom: String) -> StdResult<GetBalanceResponse>
     where
         Q: Querier,
         T: Into<String>,
         CQ: CustomQuery,
     {
-        let msg = QueryMsg::GetBalances {};
+        let msg = QueryMsg::GetBalance { denom };
         let query = WasmQuery::Smart {
             contract_addr: self.addr().into(),
             msg: to_json_binary(&msg)?,
         }
         .into();
-        let res: GetBalancesResponse = QuerierWrapper::<CQ>::new(querier).query(&query)?;
+        let res: GetBalanceResponse = QuerierWrapper::<CQ>::new(querier).query(&query)?;
         Ok(res)
     }
 }
