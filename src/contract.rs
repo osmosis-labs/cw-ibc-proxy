@@ -2,7 +2,7 @@
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{
     to_json_binary, Binary, CosmosMsg, Deps, DepsMut, Env, IbcMsg, IbcTimeout, MessageInfo,
-    Response, StdResult, Timestamp,
+    Response, StdResult,
 };
 use cw2::set_contract_version;
 
