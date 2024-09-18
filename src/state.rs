@@ -6,7 +6,6 @@ use cw_storage_plus::Item;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, JsonSchema)]
 pub struct State {
-    pub owner: Addr,
     pub channel_id: String,
     pub ibc_timeout_interval: u64,
     pub min_disbursal_amount: u64,
