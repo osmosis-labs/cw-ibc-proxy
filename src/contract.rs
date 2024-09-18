@@ -16,14 +16,14 @@ const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
     deps: DepsMut,
-    _env: Env,
+    env: Env,
     info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
     let state = State {
         owner: info.sender.clone(),
         channel_id: msg.channel_id.clone(),
-        ibc_timeout: IbcTimeout::from(Timestamp::from_seconds(msg.ibc_timeout)),
+        ibc_timeout_interval: msg.ibc_timeout_interval,
         min_disbursal_amount: msg.min_disbursal_amount,
         memo: msg.memo.clone(),
         to_address: msg.to_address.clone(),
@@ -63,11 +63,14 @@ pub mod execute {
             return Err(ContractError::InsufficientFunds {});
         }
 
+        let time = env.block.time;
+        let timeout_timestamp = time.plus_seconds(state.ibc_timeout_interval);
+
         let msg = CosmosMsg::Ibc(IbcMsg::Transfer {
             channel_id: state.channel_id,
             to_address: state.to_address,
             amount: coin,
-            timeout: state.ibc_timeout,
+            timeout: IbcTimeout::with_timestamp(timeout_timestamp),
             memo: Some(state.memo),
         });
 
@@ -108,7 +111,7 @@ mod tests {
         let msg = InstantiateMsg {
             min_disbursal_amount: 0,
             channel_id: "channel-0".to_string(),
-            ibc_timeout: 1000,
+            ibc_timeout_interval: 1000,
             memo: "memo".to_string(),
             to_address: "to_address".to_string(),
         };
@@ -130,7 +133,7 @@ mod tests {
         let msg = InstantiateMsg {
             min_disbursal_amount: 0,
             channel_id: "channel-0".to_string(),
-            ibc_timeout: 1000,
+            ibc_timeout_interval: 1000,
             memo: "memo".to_string(),
             to_address: "to_address".to_string(),
         };

@@ -5,7 +5,7 @@ use cosmwasm_std::Coin;
 pub struct InstantiateMsg {
     pub min_disbursal_amount: u64,
     pub channel_id: String,
-    pub ibc_timeout: u64,
+    pub ibc_timeout_interval: u64,
     pub memo: String,
     pub to_address: String,
 }
