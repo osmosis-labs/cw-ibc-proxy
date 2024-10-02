@@ -1,6 +1,6 @@
 use cosmwasm_schema::write_api;
 
-use osmosis_revenue_transfer_contract::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
+use cw_ibc_proxy::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
 
 fn main() {
     write_api! {
