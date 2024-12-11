@@ -42,10 +42,20 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::DisburseFunds { denom } => execute::disburse_funds(deps, env, denom),
+        ExecuteMsg::SwapExactAmountIn {
+            routes,
+            token_in,
+            token_out_min_amount,
+        } => execute::swap_exact_amount_in(env, routes, token_in, token_out_min_amount),
     }
 }
 
 pub mod execute {
+    use cosmwasm_std::{AnyMsg, Coin, Empty};
+    use osmosis_std::types::osmosis::poolmanager::v1beta1::{
+        MsgSwapExactAmountIn, SwapAmountInRoute,
+    };
+
     use super::*;
 
     pub fn disburse_funds(
@@ -71,7 +81,34 @@ pub mod execute {
             memo: Some(state.memo),
         });
 
-        Ok(Response::new().add_message(msg))
+        Ok(Response::new()
+            .add_attribute("method", "disburse_funds")
+            .add_message(msg))
+    }
+
+    /// Swap on behalf of the contract.
+    pub fn swap_exact_amount_in(
+        env: Env,
+        routes: Vec<SwapAmountInRoute>,
+        token_in: Coin,
+        token_out_min_amount: String,
+    ) -> Result<Response, ContractError> {
+        let msg = CosmosMsg::<Empty>::Any(AnyMsg {
+            type_url: MsgSwapExactAmountIn::TYPE_URL.to_string(),
+            value: Binary::new(
+                MsgSwapExactAmountIn {
+                    sender: env.contract.address.to_string(),
+                    routes,
+                    token_in: Some(token_in.into()),
+                    token_out_min_amount,
+                }
+                .to_proto_bytes(),
+            ),
+        });
+
+        Ok(Response::new()
+            .add_attribute("method", "swap_exact_amount_in")
+            .add_message(msg))
     }
 }
 
@@ -95,8 +132,13 @@ pub mod query {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cosmwasm_std::testing::{message_info, mock_dependencies_with_balance, mock_env};
+    use cosmwasm_std::testing::{
+        message_info, mock_dependencies_with_balance, mock_env, MOCK_CONTRACT_ADDR,
+    };
     use cosmwasm_std::{coins, from_json, Addr, Coin, Uint128};
+    use osmosis_std::types::osmosis::poolmanager::v1beta1::{
+        MsgSwapExactAmountIn, SwapAmountInRoute,
+    };
 
     #[test]
     fn disburse_funds() {
@@ -118,6 +160,64 @@ mod tests {
             denom: "denom".to_string(),
         };
         let _res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
+    }
+
+    #[test]
+    fn swap_exact_amount_in() {
+        let mut deps = mock_dependencies_with_balance(&[Coin {
+            amount: Uint128::new(2000),
+            denom: "denom".to_string(),
+        }]);
+
+        let msg = InstantiateMsg {
+            min_disbursal_amount: 0,
+            channel_id: "channel-0".to_string(),
+            ibc_timeout_interval: 1000,
+            memo: "memo".to_string(),
+            to_address: "to_address".to_string(),
+        };
+        let info = message_info(&Addr::unchecked("123"), &coins(2000, "denom"));
+        let _res = instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
+
+        let routes = vec![
+            SwapAmountInRoute {
+                pool_id: 1,
+                token_out_denom: "denom2".to_string(),
+            },
+            SwapAmountInRoute {
+                pool_id: 2,
+                token_out_denom: "denom3".to_string(),
+            },
+        ];
+        let token_in = Coin {
+            amount: Uint128::new(1000),
+            denom: "denom1".to_string(),
+        };
+        let token_out_min_amount = "2000".to_string();
+
+        let msg = ExecuteMsg::SwapExactAmountIn {
+            routes: routes.clone(),
+            token_in: token_in.clone(),
+            token_out_min_amount: token_out_min_amount.clone(),
+        };
+        let res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
+
+        assert_eq!(res.messages.len(), 1);
+
+        let CosmosMsg::Any(any) = res.messages[0].clone().msg else {
+            panic!("Expected a CosmosMsg::Any");
+        };
+
+        let msg = MsgSwapExactAmountIn::try_from(any.value).unwrap();
+        assert_eq!(
+            msg,
+            MsgSwapExactAmountIn {
+                sender: MOCK_CONTRACT_ADDR.to_string(),
+                routes,
+                token_in: Some(token_in.into()),
+                token_out_min_amount,
+            }
+        );
     }
 
     #[test]
