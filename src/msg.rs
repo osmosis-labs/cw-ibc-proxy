@@ -22,6 +22,11 @@ pub enum ExecuteMsg {
         token_in: Coin,
         token_out_min_amount: String,
     },
+    TransferAdmin {
+        to: String,
+    },
+    CancelTransferAdmin {},
+    ClaimAdmin {},
 }
 
 #[cw_serde]

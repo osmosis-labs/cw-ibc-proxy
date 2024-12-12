@@ -47,7 +47,7 @@ impl Admin {
         }
     }
 
-    pub fn cancel(self, sender: &Addr) -> Result<Self, ContractError> {
+    pub fn cancel_transfer(self, sender: &Addr) -> Result<Self, ContractError> {
         ensure_eq!(sender, self.admin(), ContractError::Unauthorized {});
 
         match self {
@@ -153,13 +153,13 @@ mod tests {
             to: to.clone(),
         };
 
-        let err = admin.clone().cancel(&someone_else).unwrap_err();
+        let err = admin.clone().cancel_transfer(&someone_else).unwrap_err();
         assert_eq!(err, ContractError::Unauthorized {});
 
-        let err = admin.clone().cancel(&to).unwrap_err();
+        let err = admin.clone().cancel_transfer(&to).unwrap_err();
         assert_eq!(err, ContractError::Unauthorized {});
 
-        let admin = admin.cancel(&from).unwrap();
+        let admin = admin.cancel_transfer(&from).unwrap();
         assert_eq!(admin, Admin::Settled { current: from });
     }
 }

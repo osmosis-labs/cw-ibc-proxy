@@ -51,6 +51,9 @@ pub fn execute(
             token_in,
             token_out_min_amount,
         } => execute::swap_exact_amount_in(env, deps, info, routes, token_in, token_out_min_amount),
+        ExecuteMsg::TransferAdmin { to } => execute::transfer_admin(deps, info, to),
+        ExecuteMsg::CancelTransferAdmin {} => execute::cancel_transfer_admin(deps, info),
+        ExecuteMsg::ClaimAdmin {} => execute::claim_admin(deps, info),
     }
 }
 
@@ -124,6 +127,42 @@ pub mod execute {
             .add_attribute("method", "swap_exact_amount_in")
             .add_message(msg))
     }
+
+    pub fn transfer_admin(
+        deps: DepsMut,
+        info: MessageInfo,
+        to: String,
+    ) -> Result<Response, ContractError> {
+        STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
+            state.admin = state
+                .admin
+                .transfer(&info.sender, deps.api.addr_validate(&to)?)?;
+            Ok(state)
+        })?;
+
+        Ok(Response::new().add_attribute("method", "transfer_admin"))
+    }
+
+    pub fn cancel_transfer_admin(
+        deps: DepsMut,
+        info: MessageInfo,
+    ) -> Result<Response, ContractError> {
+        STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
+            state.admin = state.admin.cancel_transfer(&info.sender)?;
+            Ok(state)
+        })?;
+
+        Ok(Response::new().add_attribute("method", "cancel_transfer_admin"))
+    }
+
+    pub fn claim_admin(deps: DepsMut, info: MessageInfo) -> Result<Response, ContractError> {
+        STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
+            state.admin = state.admin.claim(&info.sender)?;
+            Ok(state)
+        })?;
+
+        Ok(Response::new().add_attribute("method", "claim_admin"))
+    }
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
@@ -147,7 +186,8 @@ pub mod query {
 mod tests {
     use super::*;
     use cosmwasm_std::testing::{
-        message_info, mock_dependencies_with_balance, mock_env, MOCK_CONTRACT_ADDR,
+        message_info, mock_dependencies, mock_dependencies_with_balance, mock_env,
+        MOCK_CONTRACT_ADDR,
     };
     use cosmwasm_std::{coins, from_json, Addr, Coin, Uint128};
     use osmosis_std::types::osmosis::poolmanager::v1beta1::{
@@ -273,5 +313,86 @@ mod tests {
             },
             value.balance
         );
+    }
+
+    #[test]
+    fn test_admin() {
+        let mut deps = mock_dependencies();
+        let admin = deps.api.addr_make("admin");
+        let to = deps.api.addr_make("to");
+
+        let msg = InstantiateMsg {
+            min_disbursal_amount: 0,
+            channel_id: "channel-0".to_string(),
+            ibc_timeout_interval: 1000,
+            memo: "memo".to_string(),
+            to_address: "to_address".to_string(),
+            admin: admin.to_string(),
+        };
+        let info = message_info(&admin, &[]);
+        let _res = instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
+
+        let state = STATE.load(&deps.storage).unwrap();
+        assert_eq!(
+            state.admin,
+            Admin::Settled {
+                current: admin.clone()
+            }
+        );
+
+        // transfer admin and cancel transfer
+        let msg = ExecuteMsg::TransferAdmin { to: to.to_string() };
+        let _res = execute(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
+
+        let state = STATE.load(&deps.storage).unwrap();
+        assert_eq!(
+            state.admin,
+            Admin::Transferring {
+                from: admin.clone(),
+                to: to.clone()
+            }
+        );
+
+        let msg = ExecuteMsg::CancelTransferAdmin {};
+        let _res = execute(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
+
+        let state = STATE.load(&deps.storage).unwrap();
+        assert_eq!(
+            state.admin,
+            Admin::Settled {
+                current: admin.clone()
+            }
+        );
+
+        // transfer admin and claim
+        let msg = ExecuteMsg::TransferAdmin { to: to.to_string() };
+        let _res = execute(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
+
+        let state = STATE.load(&deps.storage).unwrap();
+        assert_eq!(
+            state.admin,
+            Admin::Transferring {
+                from: admin.clone(),
+                to: to.clone()
+            }
+        );
+
+        let info = message_info(&to, &[]);
+        let msg = ExecuteMsg::ClaimAdmin {};
+        let _res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
+
+        let state = STATE.load(&deps.storage).unwrap();
+        assert_eq!(
+            state.admin,
+            Admin::Settled {
+                current: to.clone()
+            }
+        );
+
+        // prev admin can't transfer anymore
+        let info = message_info(&admin, &[]);
+        let msg = ExecuteMsg::TransferAdmin { to: to.to_string() };
+        let res = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
+        assert_eq!(res, ContractError::Unauthorized {});
     }
 }
