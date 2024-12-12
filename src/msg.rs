@@ -9,6 +9,7 @@ pub struct InstantiateMsg {
     pub ibc_timeout_interval: u64,
     pub memo: String,
     pub to_address: String,
+    pub admin: String,
 }
 
 #[cw_serde]

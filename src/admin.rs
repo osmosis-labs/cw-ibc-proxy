@@ -1,8 +1,10 @@
-use cosmwasm_std::{ensure, Addr};
+use cosmwasm_schema::cw_serde;
+use cosmwasm_std::{ensure_eq, Addr};
 
 use crate::ContractError;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[cw_serde]
+
 pub enum Admin {
     Settled { current: Addr },
     Transferring { from: Addr, to: Addr },
@@ -24,7 +26,7 @@ impl Admin {
     }
 
     pub fn transfer(self, sender: &Addr, to: Addr) -> Result<Self, ContractError> {
-        ensure!(sender == self.admin(), ContractError::Unauthorized {});
+        ensure_eq!(sender, self.admin(), ContractError::Unauthorized {});
 
         match self {
             Admin::Settled { current: address } => Ok(Admin::Transferring { from: address, to }),
@@ -33,8 +35,9 @@ impl Admin {
     }
 
     pub fn claim(self, sender: &Addr) -> Result<Self, ContractError> {
-        ensure!(
-            Some(sender) == self.candidate(),
+        ensure_eq!(
+            Some(sender),
+            self.candidate(),
             ContractError::Unauthorized {}
         );
 
@@ -45,7 +48,7 @@ impl Admin {
     }
 
     pub fn cancel(self, sender: &Addr) -> Result<Self, ContractError> {
-        ensure!(sender == self.admin(), ContractError::Unauthorized {});
+        ensure_eq!(sender, self.admin(), ContractError::Unauthorized {});
 
         match self {
             Admin::Transferring { from, to: _ } => Ok(Admin::Settled { current: from }),
@@ -153,7 +156,7 @@ mod tests {
         let err = admin.clone().cancel(&someone_else).unwrap_err();
         assert_eq!(err, ContractError::Unauthorized {});
 
-        let err = admin.clone().clone().cancel(&to).unwrap_err();
+        let err = admin.clone().cancel(&to).unwrap_err();
         assert_eq!(err, ContractError::Unauthorized {});
 
         let admin = admin.cancel(&from).unwrap();

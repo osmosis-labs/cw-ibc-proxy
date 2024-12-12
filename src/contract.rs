@@ -6,6 +6,7 @@ use cosmwasm_std::{
 };
 use cw2::set_contract_version;
 
+use crate::admin::Admin;
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, GetBalanceResponse, InstantiateMsg, QueryMsg};
 use crate::state::{State, STATE};
@@ -26,6 +27,9 @@ pub fn instantiate(
         min_disbursal_amount: msg.min_disbursal_amount,
         memo: msg.memo.clone(),
         to_address: msg.to_address.clone(),
+        admin: Admin::Settled {
+            current: deps.api.addr_validate(&msg.admin)?,
+        },
     };
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
     STATE.save(deps.storage, &state)?;
@@ -37,7 +41,7 @@ pub fn instantiate(
 pub fn execute(
     deps: DepsMut,
     env: Env,
-    _info: MessageInfo,
+    info: MessageInfo,
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
@@ -46,12 +50,12 @@ pub fn execute(
             routes,
             token_in,
             token_out_min_amount,
-        } => execute::swap_exact_amount_in(env, routes, token_in, token_out_min_amount),
+        } => execute::swap_exact_amount_in(env, deps, info, routes, token_in, token_out_min_amount),
     }
 }
 
 pub mod execute {
-    use cosmwasm_std::{AnyMsg, Coin, Empty};
+    use cosmwasm_std::{ensure_eq, AnyMsg, Coin, Empty};
     use osmosis_std::types::osmosis::poolmanager::v1beta1::{
         MsgSwapExactAmountIn, SwapAmountInRoute,
     };
@@ -89,10 +93,20 @@ pub mod execute {
     /// Swap on behalf of the contract.
     pub fn swap_exact_amount_in(
         env: Env,
+        deps: DepsMut,
+        info: MessageInfo,
         routes: Vec<SwapAmountInRoute>,
         token_in: Coin,
         token_out_min_amount: String,
     ) -> Result<Response, ContractError> {
+        let state = STATE.load(deps.storage)?;
+
+        ensure_eq!(
+            info.sender,
+            state.admin.admin(),
+            ContractError::Unauthorized {}
+        );
+
         let msg = CosmosMsg::<Empty>::Any(AnyMsg {
             type_url: MsgSwapExactAmountIn::TYPE_URL.to_string(),
             value: Binary::new(
@@ -153,7 +167,9 @@ mod tests {
             ibc_timeout_interval: 1000,
             memo: "memo".to_string(),
             to_address: "to_address".to_string(),
+            admin: deps.api.addr_make("admin").to_string(),
         };
+
         let info = message_info(&Addr::unchecked("123"), &coins(2000, "denom"));
         let _res = instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
         let msg = ExecuteMsg::DisburseFunds {
@@ -169,14 +185,17 @@ mod tests {
             denom: "denom".to_string(),
         }]);
 
+        let admin = deps.api.addr_make("admin");
+
         let msg = InstantiateMsg {
             min_disbursal_amount: 0,
             channel_id: "channel-0".to_string(),
             ibc_timeout_interval: 1000,
             memo: "memo".to_string(),
             to_address: "to_address".to_string(),
+            admin: admin.to_string(),
         };
-        let info = message_info(&Addr::unchecked("123"), &coins(2000, "denom"));
+        let info = message_info(&admin, &coins(2000, "denom"));
         let _res = instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();
 
         let routes = vec![
@@ -200,7 +219,7 @@ mod tests {
             token_in: token_in.clone(),
             token_out_min_amount: token_out_min_amount.clone(),
         };
-        let res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
+        let res = execute(deps.as_mut(), mock_env(), info, msg.clone()).unwrap();
 
         assert_eq!(res.messages.len(), 1);
 
@@ -208,9 +227,8 @@ mod tests {
             panic!("Expected a CosmosMsg::Any");
         };
 
-        let msg = MsgSwapExactAmountIn::try_from(any.value).unwrap();
         assert_eq!(
-            msg,
+            MsgSwapExactAmountIn::try_from(any.value).unwrap(),
             MsgSwapExactAmountIn {
                 sender: MOCK_CONTRACT_ADDR.to_string(),
                 routes,
@@ -218,6 +236,11 @@ mod tests {
                 token_out_min_amount,
             }
         );
+
+        // non-admin can't perform the swap
+        let info = message_info(&Addr::unchecked("123"), &coins(2000, "denom"));
+        let res = execute(deps.as_mut(), mock_env(), info, msg).unwrap_err();
+        assert_eq!(res, ContractError::Unauthorized {});
     }
 
     #[test]
@@ -233,6 +256,7 @@ mod tests {
             ibc_timeout_interval: 1000,
             memo: "memo".to_string(),
             to_address: "to_address".to_string(),
+            admin: deps.api.addr_make("admin").to_string(),
         };
         let info = message_info(&Addr::unchecked("123"), &coins(2000, "denom"));
         let _res = instantiate(deps.as_mut(), mock_env(), info.clone(), msg).unwrap();

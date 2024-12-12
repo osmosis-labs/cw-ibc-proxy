@@ -65,6 +65,7 @@ fn test_swap_exact_amount_in() {
                 min_disbursal_amount: 100,
                 memo: "memo".to_string(),
                 to_address: "osmo1qzskhrcjnk5634mq5s5ssdlw34aj844ke4m343".to_string(),
+                admin: admin.address().to_string(),
             },
             None,
             Some("proxy"),
